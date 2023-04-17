@@ -35,7 +35,7 @@ void get_mac_addr(char* interface, Mac& attackerMac){
 
 void get_ip(char* interface, Ip& attackerIp ){
 
-  int sockfd;
+    int sockfd;
     struct ifreq ifr;
 
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -117,16 +117,14 @@ int main(int argc, char* argv[]) {
 	cout << "[attacker MAC Address] " << string(attackerMac) << "\n";
 	cout << "[attacker IP Address] " << string(attackerIp) << "\n";
 	
-	
+	pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
+	if (handle == nullptr) {
+		fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
+		return -1;
+	}
+
 	for (int i = 0; i < ((argc / 2) - 1); i++)
 	{
-		pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
-		if (handle == nullptr) {
-			fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
-	
-			return -1;
-		}
-
 		senderIp = Ip(argv[2+i*2]);
 		cout <<"[Setting attacker IP >> " << argv[i*2+2] << "]\n";
 		targetIp = Ip(argv[3+i*2]);
