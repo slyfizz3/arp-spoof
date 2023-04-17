@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 	
 	for (int i = 0; i < ((argc / 2) - 1); i++)
 	{
-		pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+		pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
 		if (handle == nullptr) {
 			fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
 	
