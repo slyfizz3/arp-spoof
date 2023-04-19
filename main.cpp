@@ -99,7 +99,7 @@ int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac attacker_
 
 }
 
-void get_mac_address(pcap_t* handle,Mac& senderMac,Mac& attackerMac, Ip& attackerIp,Ip&senderIp){
+void get_mac_address(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& senderIp, Ip&attackerIp){
 	Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
 	Mac zero = Mac("00:00:00:00:00:00");
 	Mac smac;
@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
 		cout <<"[Setting attacker IP >> " << argv[i*2+2] << "]\n";
 		targetIp = Ip(argv[3+i*2]);
 		cout << "[Setting Target IP >> " << argv[i*2+3] << "]\n";
-		get_mac_address(handle, senderMac,attackerMac, attackerIp,senderIp);
+		get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp);
 		
 		
 		pcap_close(handle);
