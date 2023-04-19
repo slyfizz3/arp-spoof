@@ -162,10 +162,9 @@ int main(int argc, char* argv[]) {
 		cout << "getting target mac address...\n";
 		get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp);
 		cout << "[Target mac address: >> " << string(targetMac) << "]\n";
-		cout << "getting sender mac Ip\n";
+		cout << "arp spoofing start\n";
 		arp_spoofing(handle, senderMac, attackerMac, targetMac, targetIp, senderIp);	
 	}
+
 	pcap_close(handle);
-			
-					
 }
