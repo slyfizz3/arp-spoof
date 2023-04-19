@@ -99,6 +99,29 @@ int ipv4_arp_checker(struct EthArpPacket * arp_packet,Ip sender_ip,Mac attacker_
 
 }
 
+void get_mac_address(pcap_t* handle,Mac& senderMac,Mac& attackerMac, Ip& attackerIp,Ip&senderIp){
+	Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
+	Mac zero = Mac("00:00:00:00:00:00");
+	Mac smac;
+	send_arp_packet(handle, broadcast, senderMac,attackerMac, attackerIp, zero, senderIp, 1 );
+	int res;
+	while (true) {
+		struct pcap_pkthdr* header;
+		const u_char* packet;
+		res = pcap_next_ex(handle, &header, &packet);
+		if (res == 0) continue;
+		if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
+			printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
+			break;
+		}
+		struct EthArpPacket *eth_arp_packet = (struct EthArpPacket *)packet;
+		if (ipv4_arp_checker(eth_arp_packet,senderIp,attackerMac)){
+			senderMac=eth_arp_packet->arp_.smac();
+			break;
+		}
+	}
+}
+
 int main(int argc, char* argv[]) {
 
 	if ((argc %2!= 0)||(argc<=3)) {
@@ -129,32 +152,9 @@ int main(int argc, char* argv[]) {
 		cout <<"[Setting attacker IP >> " << argv[i*2+2] << "]\n";
 		targetIp = Ip(argv[3+i*2]);
 		cout << "[Setting Target IP >> " << argv[i*2+3] << "]\n";
+		get_mac_address(handle, senderMac,attackerMac, attackerIp,senderIp);
 		
-		Mac broadcast = Mac("ff:ff:ff:ff:ff:ff");
-		Mac zero = Mac("00:00:00:00:00:00");
-		Mac smac;
-		send_arp_packet(handle, broadcast, senderMac,attackerMac, attackerIp, zero, senderIp, 1 );
-		int res;
-		while (true) {
-			struct pcap_pkthdr* header;
-			const u_char* packet;
-			res = pcap_next_ex(handle, &header, &packet);
-			if (res == 0) continue;
-			if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
-				printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
-				break;
-			}
-
-			struct EthArpPacket *eth_arp_packet = (struct EthArpPacket *)packet;
-			if (ipv4_arp_checker(eth_arp_packet,senderIp,attackerMac)){
-				cout << "[sender IP Address " << string(eth_arp_packet->arp_.sip()) << "]\n";
-				cout << "[sender MAC Address " << string(eth_arp_packet->arp_.smac()) << "]\n";
-				senderMac=eth_arp_packet->arp_.smac();
-				send_arp_packet(handle, senderMac, attackerMac, attackerMac,targetIp,senderMac, senderIp, 0 );
-				printf("complete\n");
-				break;
-			}
-		}
+		
 		pcap_close(handle);
 			
 	}
