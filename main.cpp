@@ -122,6 +122,10 @@ void get_mac_address(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& sende
 	}
 }
 
+void arp_spoofing(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Mac& targetMac,Ip& targetIp, Ip&senderIp){
+
+}
+
 int main(int argc, char* argv[]) {
 
 	if ((argc %2!= 0)||(argc<=3)) {
@@ -149,14 +153,19 @@ int main(int argc, char* argv[]) {
 	for (int i = 0; i < ((argc / 2) - 1); i++)
 	{
 		senderIp = Ip(argv[2+i*2]);
-		cout <<"[Setting attacker IP >> " << argv[i*2+2] << "]\n";
+		cout <<"[Setting sender IP >> " << argv[i*2+2] << "]\n";
 		targetIp = Ip(argv[3+i*2]);
 		cout << "[Setting Target IP >> " << argv[i*2+3] << "]\n";
+		cout << "getting sender mac address...\n";
 		get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp);
-		
-		
-		pcap_close(handle);
-			
+		cout << "[sender mac address:>> " << string(senderMac) << "]\n";
+		cout << "getting target mac address...\n";
+		get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp);
+		cout << "[Target mac address: >> " << string(targetMac) << "]\n";
+		cout << "getting sender mac Ip\n";
+		arp_spoofing(handle, senderMac, attackerMac, targetMac, targetIp, senderIp);	
 	}
+	pcap_close(handle);
+			
 					
 }
