@@ -9,6 +9,7 @@
 #include "ip.h"
 #include "ethhdr.h"
 #include "arphdr.h"
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -124,6 +125,7 @@ void get_mac_address(pcap_t* handle, Mac& senderMac, Mac& attackerMac, Ip& sende
 
 void arp_spoofing(pcap_t* handle, Mac& attackerMac, Mac& senderMac, Mac& targetMac,Ip& senderIp, Ip& targetIp){
 
+
 }
 
 int main(int argc, char* argv[]) {
@@ -150,21 +152,31 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
+	pid_t pid;
+	int state;
+
 	for (int i = 0; i < ((argc / 2) - 1); i++)
 	{
+		pid = fork(); 
+		if(pid==0){
 		senderIp = Ip(argv[2+i*2]);
-		cout <<"[Setting sender IP >> " << argv[i*2+2] << "]\n";
-		targetIp = Ip(argv[3+i*2]);
-		cout << "[Setting Target IP >> " << argv[i*2+3] << "]\n";
-		cout << "[getting sender mac address...]\n";
-		get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp);
-		cout << "[sender mac address >> " << string(senderMac) << "]\n";
-		cout << "[getting target mac address...]\n";
-		get_mac_address(handle, targetMac, attackerMac, targetIp, attackerIp);
-		cout << "[Target mac address >> " << string(targetMac) << "]\n";
-		cout << "[arp spoofing start]\n";
-		arp_spoofing(handle, attackerMac, senderMac, targetMac, senderIp, targetIp);	
+			targetIp = Ip(argv[3+i*2]);
+			get_mac_address(handle, senderMac, attackerMac, senderIp, attackerIp); //get sender mac address
+			get_mac_address(handle, targetMac, attackerMac, targetIp, attackerIp); // get target mac address
+			cout <<"[sender IP : " << argv[i*2+2] << "]\n";
+			cout << "[Target IP : " << argv[i*2+3] << "]\n";
+			cout << "[sender mac address : " << string(senderMac) << "]\n";
+			cout << "[Target mac address : " << string(targetMac) << "]\n";
+			cout << "[== arp spoofing start ==]\n";
+			arp_spoofing(handle, attackerMac, senderMac, targetMac, senderIp, targetIp);	
+		}
+		else if (pid>0){
+			continue;
+		}
+		else{
+			return -1;
+		}
 	}
-
+	wait(&state);
 	pcap_close(handle);
 }
